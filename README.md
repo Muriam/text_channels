@@ -1,1 +1,1 @@
-# text-hannels
+# text-channels
