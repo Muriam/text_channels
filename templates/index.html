@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Discord-like Chat</title>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+        body {
+            display: flex;
+            height: 100vh;
+            background: #36393f;
+            color: #dcddde;
+        }
+        /* Сайдбар с категориями и каналами */
+        .sidebar {
+            width: 240px;
+            background: #2f3136;
+            overflow-y: auto;
+        }
+        .user-info {
+            padding: 15px;
+            background: #292b2f;
+            border-bottom: 2px solid #202225;
+        }
+        .category {
+            padding: 15px 15px 5px 15px;
+            color: #8e9297;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .channel {
+            padding: 8px 15px;
+            margin: 2px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            color: #8e9297;
+        }
+        .channel:hover, .channel.active {
+            background: #34373c;
+            color: white;
+        }
+        /* Основная область чата */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-header {
+            padding: 15px;
+            background: #36393f;
+            border-bottom: 1px solid #202225;
+            color: white;
+            font-weight: bold;
+        }
+        .messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .message {
+            margin-bottom: 15px;
+        }
+        .message-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .avatar {
+            width: 30px;
+            height: 30px;
+            background: #5865f2;
+            border-radius: 50%;
+            margin-right: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+        }
+        .username {
+            font-weight: bold;
+            color: white;
+            margin-right: 10px;
+        }
+        .timestamp {
+            color: #72767d;
+            font-size: 12px;
+        }
+        .message-input {
+            padding: 15px;
+            background: #40444b;
+        }
+        .input-container {
+            display: flex;
+        }
+        #messageInput {
+            flex: 1;
+            padding: 10px 15px;
+            background: #40444b;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            font-size: 16px;
+        }
+        #messageInput:focus {
+            outline: none;
+        }
+        #sendButton {
+            background: #5865f2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            margin-left: 10px;
+            cursor: pointer;
+        }
+        #sendButton:hover {
+            background: #4752c4;
+        }
+        #sendButton:disabled {
+            background: #4f545c;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <!-- Сайдбар -->
+    <div class="sidebar" id="sidebar">
+        <div class="user-info">
+            👤 {{ username }}
+            <a href="/logout" style="color: #b9bbbe; float: right;">Выйти</a>
+        </div>
+    </div>
+    
+    <!-- Основная область -->
+    <div class="chat-area">
+        <div class="chat-header" id="channelName">
+            Выберите канал
+        </div>
+        
+        <div class="messages" id="messagesContainer">
+            <!-- Сообщения появятся здесь -->
+        </div>
+        
+        <div class="message-input">
+            <div class="input-container">
+                <input type="text" 
+                       id="messageInput" 
+                       placeholder="Напишите сообщение..." 
+                       disabled>
+                <button id="sendButton" disabled>Отправить</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const socket = io();
+        let currentChannel = null;
+        
+        // Загружаем категории и каналы
+        async function loadCategories() {
+            const response = await fetch('/api/categories');
+            const data = await response.json();
+            
+            const sidebar = document.getElementById('sidebar');
+            
+            data.categories.forEach(category => {
+                // Добавляем категорию
+                const categoryDiv = document.createElement('div');
+                categoryDiv.className = 'category';
+                categoryDiv.textContent = category.name;
+                sidebar.appendChild(categoryDiv);
+                
+                // Добавляем каналы этой категории
+                category.channels.forEach(channel => {
+                    const channelDiv = document.createElement('div');
+                    channelDiv.className = 'channel';
+                    channelDiv.textContent = `# ${channel.name}`;
+                    channelDiv.dataset.channelId = channel.id;
+                    channelDiv.dataset.channelName = channel.name;
+                    
+                    channelDiv.onclick = () => selectChannel(channel.id, channel.name);
+                    sidebar.appendChild(channelDiv);
+                });
+            });
+        }
+        
+        // Выбираем канал
+        async function selectChannel(channelId, channelName) {
+            if (currentChannel) {
+                socket.emit('leave', {channel_id: currentChannel});
+            }
+            
+            currentChannel = channelId;
+            document.getElementById('channelName').textContent = `# ${channelName}`;
+            
+            // Подсветка активного канала
+            document.querySelectorAll('.channel').forEach(ch => {
+                ch.classList.remove('active');
+                if (ch.dataset.channelId == channelId) {
+                    ch.classList.add('active');
+                }
+            });
+            
+            // Включаем поле ввода
+            document.getElementById('messageInput').disabled = false;
+            document.getElementById('sendButton').disabled = false;
+            document.getElementById('messageInput').focus();
+            
+            // Присоединяемся к комнате WebSocket
+            socket.emit('join', {
+                channel_id: channelId,
+                username: '{{ username }}'
+            });
+            
+            // Загружаем сообщения
+            const response = await fetch(`/api/channels/${channelId}/messages`);
+            const data = await response.json();
+            
+            const container = document.getElementById('messagesContainer');
+            container.innerHTML = '';
+            
+            data.messages.forEach(msg => {
+                addMessage(msg.user, msg.content, msg.timestamp);
+            });
+            
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        // Добавляем сообщение в чат
+        function addMessage(user, content, timestamp) {
+            const container = document.getElementById('messagesContainer');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message';
+            
+            msgDiv.innerHTML = `
+                <div class="message-header">
+                    <div class="avatar">${user.charAt(0).toUpperCase()}</div>
+                    <span class="username">${user}</span>
+                    <span class="timestamp">${timestamp}</span>
+                </div>
+                <div>${content}</div>
+            `;
+            
+            container.appendChild(msgDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        // Отправка сообщения
+        document.getElementById('sendButton').onclick = function() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (message && currentChannel) {
+                socket.emit('message', {
+                    channel_id: currentChannel,
+                    content: message
+                });
+                input.value = '';
+            }
+        };
+        
+        // Отправка по Enter
+        document.getElementById('messageInput').onkeypress = function(e) {
+            if (e.key === 'Enter') {
+                document.getElementById('sendButton').click();
+            }
+        };
+        
+        // Получаем новые сообщения от сервера
+        socket.on('new_message', function(data) {
+            if (currentChannel) {
+                addMessage(data.user, data.content, data.timestamp);
+            }
+        });
+        
+        // Статусные сообщения
+        socket.on('status', function(message) {
+            const container = document.getElementById('messagesContainer');
+            const statusDiv = document.createElement('div');
+            statusDiv.className = 'message';
+            statusDiv.style.color = '#72767d';
+            statusDiv.style.fontStyle = 'italic';
+            statusDiv.textContent = `⚡ ${message}`;
+            container.appendChild(statusDiv);
+            container.scrollTop = container.scrollHeight;
+        });
+        
+        // Инициализация
+        window.onload = function() {
+            loadCategories();
+        };
+    </script>
+</body>
+</html>
