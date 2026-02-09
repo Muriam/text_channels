@@ -2,62 +2,17 @@
 <html>
 <head>
     <title>Регистрация</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #36393f;
-            color: white;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-        }
-        .form-container {
-            background: #202225;
-            padding: 30px;
-            border-radius: 8px;
-            width: 300px;
-        }
-        input {
-            width: 100%;
-            padding: 10px;
-            margin: 10px 0;
-            background: #40444b;
-            border: none;
-            border-radius: 3px;
-            color: white;
-        }
-        button {
-            width: 100%;
-            padding: 10px;
-            background: #5865f2;
-            color: white;
-            border: none;
-            border-radius: 3px;
-            cursor: pointer;
-        }
-        button:hover {
-            background: #4752c4;
-        }
-        a {
-            color: #00aff4;
-            text-decoration: none;
-            display: block;
-            text-align: center;
-            margin-top: 15px;
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
 </head>
-<body>
+<body class="auth-body">
     <div class="form-container">
-        <h2>Регистрация</h2>
+        <h2 class="auth-title">Регистрация</h2>
         <form method="POST">
-            <input type="text" name="username" placeholder="Имя пользователя" required>
-            <input type="password" name="password" placeholder="Пароль" required>
-            <button type="submit">Зарегистрироваться</button>
+            <input class="auth-input" type="text" name="username" placeholder="Имя пользователя" required>
+            <input class="auth-input" type="password" name="password" placeholder="Пароль" required>
+            <button class="auth-button" type="submit">Зарегистрироваться</button>
         </form>
-        <a href="/login">Уже есть аккаунт? Войдите</a>
+        <a class="auth-link" href="/login">Уже есть аккаунт? Войдите</a>
     </div>
 </body>
 </html>

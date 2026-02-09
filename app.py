@@ -2,6 +2,8 @@ from flask import Flask, render_template, request, redirect, url_for, session
 from flask_socketio import SocketIO, join_room, emit
 from flask_sqlalchemy import SQLAlchemy
 import os
+from flask import send_from_directory
+
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(24)
@@ -56,6 +58,11 @@ def create_names_channels():
                 db.session.add(channel)
         
         db.session.commit()
+
+
+@app.route('/static/<path:path>')
+def serve_static(path):
+    return send_from_directory('static', path)
 
 # Маршруты
 @app.route('/')
