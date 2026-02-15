@@ -59,8 +59,6 @@ body {
     cursor: pointer;
     color: #8e9297;
     font-size: 14px;
-    display: flex;
-    align-items: center;
     transition: all 0.2s;
 }
 

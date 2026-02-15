@@ -1,15 +1,17 @@
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from flask_socketio import SocketIO, join_room, emit
 from flask_sqlalchemy import SQLAlchemy
 import os
 from flask import send_from_directory
 from datetime import datetime
 
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(24)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///chat.db'
 db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
+
 
 # Модели
 class User(db.Model):
@@ -31,7 +33,8 @@ class Message(db.Model):
     content = db.Column(db.Text)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     channel_id = db.Column(db.Integer, db.ForeignKey('channel.id'))
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)  
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    
     # Добавляем отношения
     user = db.relationship('User', backref='messages')
     channel = db.relationship('Channel', backref='messages')
@@ -39,6 +42,7 @@ class Message(db.Model):
 # текстовые каналы
 def create_names_channels():
     if not User.query.first():
+        # Создаем только обычного пользователя
         admin = User(username='admin', password='admin')
         db.session.add(admin)
         
@@ -74,6 +78,7 @@ def index():
         return redirect(url_for('login'))
     return render_template('index.html', username=session['username'])
 
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -88,6 +93,7 @@ def login():
         return "Неверные данные"
     return render_template('login.html')
 
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -95,17 +101,19 @@ def register():
         password = request.form['password']
         
         if not User.query.filter_by(username=username).first():
-            user = User(username=username, password=password)
+            user = User(username=username, password=password)  # is_admin удален
             db.session.add(user)
             db.session.commit()
             return redirect(url_for('login'))
         return "Имя уже занято"
     return render_template('register.html')
 
+
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('login'))
+
 
 @app.route('/api/categories')
 def get_categories():
@@ -116,9 +124,10 @@ def get_categories():
         result.append({
             'id': cat.id,
             'name': cat.name,
-            'channels': [{'id': c.id, 'name': c.name} for c in channels]
+            'channels': [{'id': c.id, 'name': c.name} for c in channels]  # description удален
         })
     return {'categories': result}
+
 
 @app.route('/api/channels/<int:channel_id>/messages')
 def get_messages(channel_id):
@@ -130,7 +139,7 @@ def get_messages(channel_id):
     return {'messages': [{
         'id': m.id,
         'content': m.content,
-        'user': m.user.username,  # Теперь работает благодаря relationship
+        'user': m.user.username,
         'timestamp': m.timestamp.strftime('%H:%M')
     } for m in messages]}
 
@@ -155,6 +164,7 @@ def handle_message(data):
         'user': session['username'],
         'timestamp': message.timestamp.strftime('%H:%M')
     }, room=data['channel_id'])
+
 
 if __name__ == '__main__':
     with app.app_context():
