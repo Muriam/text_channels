@@ -156,3 +156,70 @@ document.addEventListener('DOMContentLoaded', function() {
     // Инициализация
     loadCategories();
 });
+
+// Функция для кликабельности. Чтоб ссылка стала гиперссылкой.
+function formatMessageWithLinks(text) {
+    // Регулярное выражение для поиска URL
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    
+    // Заменяем URL на ссылки
+    return escapeHtml(text).replace(urlRegex, function(url) {
+        // Очищаем URL от возможных знаков препинания в конце
+        let cleanUrl = url;
+        const punctuation = /[.,;:!?)]+$/;
+        const match = url.match(punctuation);
+        let trailingPunctuation = '';
+        
+        if (match) {
+            trailingPunctuation = match[0];
+            cleanUrl = url.slice(0, -trailingPunctuation.length);
+        }
+        
+        // Создаем безопасную ссылку
+        return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="message-link">${cleanUrl}</a>${trailingPunctuation}`;
+    });
+}
+
+// Обновите функцию addMessage:
+function addMessage(user, content, timestamp) {
+    const container = document.getElementById('messagesContainer');
+    
+    // Удаляем сообщение "Пока нет сообщений" если оно есть
+    const emptyMsg = container.querySelector('.status-message');
+    if (emptyMsg && emptyMsg.textContent.includes('Пока нет сообщений')) {
+        emptyMsg.remove();
+    }
+    
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'message';
+    
+    const avatarLetter = user.charAt(0).toUpperCase();
+    const avatarColor = getAvatarColor(user);
+    
+    // Используем новую функцию для форматирования
+    const formattedContent = formatMessageWithLinks(content);
+    
+    msgDiv.innerHTML = `
+        <div class="message-header">
+            <div class="avatar" style="background: ${avatarColor}">${avatarLetter}</div>
+            <span class="username">${user}</span>
+            <span class="timestamp">${timestamp}</span>
+        </div>
+        <div class="message-content">${formattedContent}</div>
+    `;
+    
+    container.appendChild(msgDiv);
+    container.scrollTop = container.scrollHeight;
+    
+    // Добавляем обработчики кликов для новых ссылок
+    setTimeout(() => {
+        const links = msgDiv.querySelectorAll('.message-link');
+        links.forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.stopPropagation();
+                // Открываем в новой вкладке (уже есть target="_blank")
+                window.open(this.href, '_blank');
+            });
+        });
+    }, 0);
+}

@@ -3,7 +3,7 @@ from flask_socketio import SocketIO, join_room, emit
 from flask_sqlalchemy import SQLAlchemy
 import os
 from flask import send_from_directory
-
+from datetime import datetime
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(24)
@@ -31,7 +31,10 @@ class Message(db.Model):
     content = db.Column(db.Text)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     channel_id = db.Column(db.Integer, db.ForeignKey('channel.id'))
-    timestamp = db.Column(db.DateTime, server_default=db.func.now())
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)  
+    # Добавляем отношения
+    user = db.relationship('User', backref='messages')
+    channel = db.relationship('Channel', backref='messages')
 
 # текстовые каналы
 def create_names_channels():
@@ -127,7 +130,7 @@ def get_messages(channel_id):
     return {'messages': [{
         'id': m.id,
         'content': m.content,
-        'user': m.user.username,
+        'user': m.user.username,  # Теперь работает благодаря relationship
         'timestamp': m.timestamp.strftime('%H:%M')
     } for m in messages]}
 
