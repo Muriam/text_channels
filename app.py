@@ -4,6 +4,8 @@ from flask_sqlalchemy import SQLAlchemy
 import os
 from flask import send_from_directory
 from datetime import datetime
+import requests
+from bs4 import BeautifulSoup
 
 
 app = Flask(__name__)
@@ -54,11 +56,11 @@ def create_names_channels():
             
             channels = []
             if cat_name == 'Backend':
-                channels = ['Python', 'Flask', 'Django', 'SQLite3']
+                channels = ['Python', 'Flask', 'Django', 'Другие фреймворки', 'SQLite3', 'SQL', 'DataBase']
             elif cat_name == 'Frontend':
-                channels = ['JavaScript', 'HTML', 'CSS']
+                channels = ['JavaScript', 'HTML', 'CSS', 'Другие фреймворки']
             else:
-                channels = ['reference', 'web', 'C']
+                channels = ['reference', 'web', 'C', 'непонятки', 'прочее']
                 
             for chan_name in channels:
                 channel = Channel(name=chan_name, category_id=category.id)
@@ -164,6 +166,36 @@ def handle_message(data):
         'user': session['username'],
         'timestamp': message.timestamp.strftime('%H:%M')
     }, room=data['channel_id'])
+
+
+@app.route('/api/preview')
+def get_link_preview():
+    url = request.args.get('url')
+    if not url:
+        return {'error': 'No URL'}, 400
+    
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(url, headers=headers, timeout=3)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Получаем метаданные
+        title = (soup.find('meta', property='og:title') or soup.find('title'))
+        description = (soup.find('meta', property='og:description') or 
+                      soup.find('meta', attrs={'name': 'description'}))
+        image = soup.find('meta', property='og:image')
+        
+        # Извлекаем содержимое
+        preview = {
+            'title': title.get('content') if title and hasattr(title, 'get') else (title.string if title else ''),
+            'description': description.get('content') if description and hasattr(description, 'get') else '',
+            'image': image.get('content') if image and hasattr(image, 'get') else '',
+            'url': url
+        }
+        
+        return preview
+    except:
+        return {'error': 'Failed to fetch'}, 500
 
 
 if __name__ == '__main__':

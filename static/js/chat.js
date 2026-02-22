@@ -90,9 +90,16 @@ function addMessage(user, content, timestamp) {
     container.appendChild(msgDiv);
     container.scrollTop = container.scrollHeight;
     
-    // Добавляем обработчики кликов для новых ссылок
+    // Добавляем обработчики кликов для новых ссылок и превью
     setTimeout(() => {
         const links = msgDiv.querySelectorAll('.message-link');
+        
+        // Превью для первой ссылки
+        if (links.length > 0) {
+            getLinkPreview(links[0].href);
+        }
+        
+        // Обработчик клика по ссылкам
         links.forEach(link => {
             link.addEventListener('click', function(e) {
                 e.stopPropagation();
@@ -158,6 +165,59 @@ function formatMessageWithLinks(text) {
         // Создаем безопасную ссылку
         return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="message-link">${cleanUrl}</a>${trailingPunctuation}`;
     });
+}
+
+// Функция для получения превью
+async function getLinkPreview(url) {
+    try {
+        const response = await fetch(`/api/preview?url=${encodeURIComponent(url)}`);
+        const data = await response.json();
+        if (!data.error) {
+            showLinkPreview(data);
+        }
+    } catch (error) {
+        console.log('Preview error:', error);
+    }
+}
+
+// Показ красивого превью под сообщением
+function showLinkPreview(data) {
+    const lastMessage = document.querySelector('.message:last-child');
+    if (!lastMessage) return;
+    
+    // Получаем домен для site_name
+    let siteName = 'Ссылка';
+    try {
+        siteName = new URL(data.url).hostname.replace('www.', '');
+    } catch (e) {}
+    
+    // Создаем контейнер превью
+    const preview = document.createElement('div');
+    preview.className = 'link-preview';
+    
+    // Определяем контент изображения
+    let imageHtml = '';
+    if (data.image) {
+        imageHtml = `<img src="${data.image}" alt="${data.title || 'Preview'}">`;
+    } else {
+        imageHtml = '<div class="no-image">🖼️</div>';
+    }
+    
+    // Формируем HTML превью
+    preview.innerHTML = `
+        <a href="${data.url}" target="_blank" rel="noopener noreferrer" class="preview-card">
+            <div class="preview-image">
+                ${imageHtml}
+            </div>
+            <div class="preview-info">
+                <div class="preview-site">${siteName}</div>
+                <div class="preview-title">${data.title || siteName}</div>
+                ${data.description ? `<div class="preview-description">${data.description.substring(0, 150)}${data.description.length > 150 ? '...' : ''}</div>` : ''}
+            </div>
+        </a>
+    `;
+    
+    lastMessage.appendChild(preview);
 }
 
 // Обработчики событий
