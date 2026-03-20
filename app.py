@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session
 from flask_socketio import SocketIO, join_room, emit
 from flask_sqlalchemy import SQLAlchemy
 import os
@@ -174,27 +174,109 @@ def get_link_preview():
     if not url:
         return {'error': 'No URL'}, 400
     
+
+    from urllib.parse import unquote, urlparse
+    import re
+    
+    # Декодируем URL если нужно
+    url = unquote(url)
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate',
+        'Connection': 'keep-alive',
+    }
+    
     try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(url, headers=headers, timeout=3)
+        # Увеличиваем таймаут до 5 секунд
+        response = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
+        response.raise_for_status()
+        
+        # Определяем кодировку
+        if response.encoding is None:
+            response.encoding = 'utf-8'
+            
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Получаем метаданные
-        title = (soup.find('meta', property='og:title') or soup.find('title'))
-        description = (soup.find('meta', property='og:description') or 
-                      soup.find('meta', attrs={'name': 'description'}))
-        image = soup.find('meta', property='og:image')
+        # Функция для безопасного получения атрибутов
+        def get_meta_content(property_names, is_property=True):
+            for name in property_names:
+                if is_property:
+                    tag = soup.find('meta', property=name)
+                else:
+                    tag = soup.find('meta', attrs={'name': name})
+                if tag and tag.get('content'):
+                    return tag['content']
+            return ''
         
-        # Извлекаем содержимое
+        # Пробуем разные варианты заголовков
+        title = (
+            get_meta_content(['og:title', 'twitter:title']) or
+            get_meta_content(['title'], is_property=False) or
+            (soup.find('title').string if soup.find('title') else '')
+        )
+        
+        # Пробуем разные варианты описаний
+        description = (
+            get_meta_content(['og:description', 'twitter:description']) or
+            get_meta_content(['description'], is_property=False)
+        )
+        
+        # Пробуем разные варианты изображений
+        image = (
+            get_meta_content(['og:image', 'twitter:image']) or
+            get_meta_content(['og:image:secure_url'])
+        )
+        
+        # Для YouTube особенно
+        if 'youtube.com' in url or 'youtu.be' in url:
+            video_id = None
+            if 'youtube.com/watch' in url:
+                match = re.search(r'[?&]v=([^&]+)', url)
+                if match:
+                    video_id = match.group(1)
+            elif 'youtu.be/' in url:
+                video_id = url.split('youtu.be/')[-1].split('?')[0]
+            
+            if video_id:
+                image = f'https://img.youtube.com/vi/{video_id}/maxresdefault.jpg'
+                if not title:
+                    title = 'YouTube Video'
+        
+        # Очищаем от лишних пробелов
+        if title:
+            title = ' '.join(title.split())
+        if description:
+            description = ' '.join(description.split())
+        
+        # Функция для получения домена
+        def get_domain_name(url):
+            try:
+                domain = urlparse(url).netloc
+                return domain.replace('www.', '')
+            except:
+                return 'Ссылка'
+        
         preview = {
-            'title': title.get('content') if title and hasattr(title, 'get') else (title.string if title else ''),
-            'description': description.get('content') if description and hasattr(description, 'get') else '',
-            'image': image.get('content') if image and hasattr(image, 'get') else '',
-            'url': url
+            'title': title[:200] if title else '',
+            'description': description[:300] if description else '',
+            'image': image if image and not image.startswith('/') else '',
+            'url': url,
+            'site_name': get_meta_content(['og:site_name']) or get_domain_name(url)
         }
         
-        return preview
-    except:
+        return preview  # ← Вот этот return
+        
+    except requests.exceptions.Timeout:
+        return {'error': 'Timeout'}, 504
+    except requests.exceptions.ConnectionError:
+        return {'error': 'Connection error'}, 502
+    except requests.exceptions.HTTPError as e:
+        return {'error': f'HTTP {e.response.status_code}'}, e.response.status_code
+    except Exception as e:
+        print(f"Preview error for {url}: {str(e)}")
         return {'error': 'Failed to fetch'}, 500
 
 

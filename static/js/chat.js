@@ -163,17 +163,79 @@ function formatMessageWithLinks(text) {
     });
 }
 
-// Функция для получения превью - теперь принимает messageDiv как параметр
+// Функция для получения превью
 async function getLinkPreview(url, messageDiv) {
     try {
         const response = await fetch(`/api/preview?url=${encodeURIComponent(url)}`);
         const data = await response.json();
-        if (!data.error) {
+        
+        // Проверяем статус ответа
+        if (response.ok && !data.error) {
             showLinkPreview(data, messageDiv);
+        } else {
+            console.log('Preview error for', url, ':', data.error || response.status);
+            
+            // Для таймаута (504) и других ошибок показываем простое превью
+            if (response.status === 504) {
+                console.log('Timeout for', url, '- showing simple preview');
+            }
+            showSimplePreview(url, messageDiv);
         }
     } catch (error) {
-        console.log('Preview error:', error);
+        console.log('Preview fetch error:', error);
+        showSimplePreview(url, messageDiv);
     }
+}
+
+// Простое превью если не удалось получить метаданные
+function showSimplePreview(url, messageDiv) {
+    if (!messageDiv) return;
+    
+    // Проверяем, есть ли уже превью
+    const existingPreview = messageDiv.querySelector('.link-preview');
+    if (existingPreview) return;
+    
+    let siteName = 'Ссылка';
+    let displayUrl = url;
+    
+    try {
+        const urlObj = new URL(url);
+        siteName = urlObj.hostname.replace('www.', '');
+        
+        // Для YouTube показываем понятное сообщение
+        if (siteName.includes('youtube.com') || siteName.includes('youtu.be')) {
+            siteName = 'YouTube (недоступен)';
+        }
+        
+        // Укорачиваем URL для отображения
+        displayUrl = url.length > 50 ? url.substring(0, 50) + '...' : url;
+    } catch (e) {
+        displayUrl = url.length > 50 ? url.substring(0, 50) + '...' : url;
+    }
+    
+    const preview = document.createElement('div');
+    preview.className = 'link-preview simple';
+    
+    // Добавляем иконку в зависимости от сайта
+    let icon = '🔗';
+    if (siteName.includes('YouTube')) icon = '🎬';
+    else if (siteName.includes('github')) icon = '🐙';
+    else if (siteName.includes('rutube')) icon = '📺';
+    
+    preview.innerHTML = `
+        <a href="${url}" target="_blank" rel="noopener noreferrer" class="preview-card">
+            <div class="preview-image">
+                <div class="no-image">${icon}</div>
+            </div>
+            <div class="preview-info">
+                <div class="preview-site">${siteName}</div>
+                <div class="preview-title">${displayUrl}</div>
+                <div class="preview-description">Нажмите, чтобы открыть ссылку</div>
+            </div>
+        </a>
+    `;
+    
+    messageDiv.appendChild(preview);
 }
 
 // Показ красивого превью под сообщением - теперь для конкретного сообщения
